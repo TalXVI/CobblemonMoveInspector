@@ -17,4 +17,4 @@ rootProject.name = 'CobblemonMoveInspector'
 
 include 'common'
 include 'fabric'
-include 'neoforge'
+// Removing NeoForge module

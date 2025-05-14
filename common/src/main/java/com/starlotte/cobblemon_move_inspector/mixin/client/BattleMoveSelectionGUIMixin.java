@@ -24,7 +24,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-
 import javax.script.ScriptException;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -74,13 +73,63 @@ public abstract class BattleMoveSelectionGUIMixin {
                     ElementalType opponentFirstType = properties.getPrimaryType();
                     ElementalType opponentSecondType = properties.getSecondaryType();
 
-                    float effectiveness = MoveEffectivenessLookup.getModifier(moveTemplate, opponentFirstType, opponentSecondType, firstPlayer.getUuid());
-                    if (effectiveness == 0) {
-                        tooltipInfo.add(Component.translatable("move.inspector.immune").withStyle(ChatFormatting.ITALIC, ChatFormatting.GRAY));
-                    } else if (effectiveness > 1) {
-                        tooltipInfo.add(Component.translatable("move.inspector.effective", effectiveness).withStyle(ChatFormatting.BOLD, ChatFormatting.GOLD));
-                    } else if (effectiveness < 1) {
-                        tooltipInfo.add(Component.translatable("move.inspector.ineffective", effectiveness).withStyle(ChatFormatting.ITALIC, ChatFormatting.GRAY));
+                    // Only show effectiveness for damaging moves
+                    if (moveTemplate.getDamageCategory() != DamageCategories.INSTANCE.getSTATUS()) {
+                        // Try to get ability information from the battle data
+                        String abilityName = null;
+                        
+                        // Access ability through battle data if possible
+                        // First check if there's an ability field we can access via reflection
+                        try {
+                            // Get abilities from the first field that might contain them
+                            java.lang.reflect.Field[] fields = firstActivePokemon.getClass().getDeclaredFields();
+                            for (java.lang.reflect.Field field : fields) {
+                                field.setAccessible(true);
+                                Object value = field.get(firstActivePokemon);
+                                // Check if this is an ability-related field
+                                if (value != null && value.getClass().getName().contains("ability")) {
+                                    // Try to get the name from this object
+                                    java.lang.reflect.Method nameMethod = value.getClass().getMethod("getName");
+                                    if (nameMethod != null) {
+                                        Object name = nameMethod.invoke(value);
+                                        if (name instanceof String) {
+                                            abilityName = (String)name;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            // If reflection fails, try other methods or leave null
+                        }
+                        
+                        // If we couldn't get the ability from battle data, check properties
+                        if (abilityName == null && properties != null) {
+                            try {
+                                // Try to access ability from properties
+                                if (properties.getAbility() != null) {
+                                    abilityName = properties.getAbility().getName();
+                                }
+                            } catch (Exception e) {
+                                // If this fails too, we'll fall back to type-only effectiveness
+                            }
+                        }
+                        
+                        float effectiveness = MoveEffectivenessLookup.getModifier(
+                            moveTemplate, 
+                            opponentFirstType, 
+                            opponentSecondType, 
+                            abilityName, 
+                            firstPlayer.getUuid()
+                        );
+                        
+                        if (effectiveness == 0) {
+                            tooltipInfo.add(Component.translatable("move.inspector.immune").withStyle(ChatFormatting.ITALIC, ChatFormatting.GRAY));
+                        } else if (effectiveness > 1) {
+                            tooltipInfo.add(Component.translatable("move.inspector.effective", effectiveness).withStyle(ChatFormatting.BOLD, ChatFormatting.GOLD));
+                        } else if (effectiveness < 1) {
+                            tooltipInfo.add(Component.translatable("move.inspector.ineffective", effectiveness).withStyle(ChatFormatting.ITALIC, ChatFormatting.GRAY));
+                        }
                     }
                 }
             }
